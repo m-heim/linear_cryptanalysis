@@ -1,0 +1,10 @@
+\babel@toc {english}{}\relax 
+\contentsline {section}{\numberline {1}Abstract}{2}{}%
+\contentsline {section}{\numberline {2}Introduction}{2}{}%
+\contentsline {paragraph}{Cryptanalysis}{2}{}%
+\contentsline {paragraph}{About}{2}{}%
+\contentsline {section}{\numberline {3}Impact}{2}{}%
+\contentsline {section}{\numberline {4}Theory}{2}{}%
+\contentsline {section}{\numberline {5}Demonstration}{2}{}%
+\contentsline {section}{\numberline {6}Protection}{2}{}%
+\contentsline {section}{\numberline {7}Conclusion}{2}{}%
