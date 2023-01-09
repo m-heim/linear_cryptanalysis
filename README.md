@@ -12,3 +12,5 @@ Approximations]
 ## Attacks
 https://link.springer.com/chapter/10.1007/3-540-48285-7_33 - Linear Cryptanalysis Method for DES Cipher
 - https://link.springer.com/chapter/10.1007/3-540-48658-5_3 - Differential Linear Cryptanalysis
+- https://link.springer.com/content/pdf/10.1007/3-540-48285-7_33.pdf?pdf=inline%20link - [Famous Linear Cryptanalysis (Matsui)] / Linear Cryptanalysis Method for
+DES Cipher
