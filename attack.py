@@ -1,5 +1,6 @@
 import numpy as npy
 import random
+import math
 
 
 def sbox():
@@ -7,47 +8,22 @@ def sbox():
     return random.sample(range(256), k=256)
 
 
-def sbox_round(block: list):
-    box = sbox()
-    ret = [0,0,0,0]
-    for i in range(4):
-        ret[i] = box[block[i]]
-    return ret
-
-
 def shuffle(pt: list):
     random.seed("Jg2fe233gf32", version=2)
     return random.sample(pt, k=len(pt))
 
 
-def xor(key: list, block: list):
-    ret = []
-    for i in range(4):
-        ret.append((block[i] ^ key[i]))
-    return ret
-
-
-def cipher(key: list, pt: list):
-    key1 = key[:4]
-    key2 = key[4:]
-    output = xor(key1, pt)
-    output = sbox_round(output)
-    output = shuffle(output)
-    output = xor(key2, pt)
+def cipher(key: npy.array, pt: npy.array):
+    output = npy.array(pt.size)
+    for i in range(math.ceil(pt.size / 8)):
+        output = npy.bitwise_xor(output, key)
+        output = npy.array(list(map(lambda b: sbox()[b], output)))
+        output = npy.array(list(map(lambda i: )))
+        output = npy.bitwise_xor(output, key)
     return output
 
-
-def main():
-    key = list(b'\xB7\x62\xF1\x43\xC1\x93\x3A\x53')
-    print(key)
-    #pt = list(b'Hey!')
-    #print(pt)
-    #ct = cipher(key, pt)
-    #print(ct)
-    test_pt = list(b'\x00\x00\x00\x01')
-    print(cipher(key, test_pt))
+def find_good_choices():
     powers = [2 ** x for x in range(8)]
-    matrix = []
     good_choices = []
     for in1 in range(8):
         for in2 in list(range(8))[:in1] + list(range(8))[in1 + 1:]:
@@ -59,12 +35,22 @@ def main():
                 output &= out_mask
                 if output == out_mask:
                     approx_true += 1
-            print('for ' + str(in1) + ' ' + str(in2) + ' the approximation is true ' + str(approx_true) + ' times')
+            print('for ' + str(in1) + ' ' + str(in2) +
+                  ' the approximation is true ' + str(approx_true) + ' times')
             if approx_true >= 6 or approx_true <= 1:
-                good_choices.append(str(approx_true) + ' ' + str(in1) + ' ' + str(in2) + ' ' + str(o) + ' ' + '\n')
-    print(good_choices)
+                good_choices.append(
+                    str(approx_true) + ' ' + str(in1) + ' ' + str(in2) + ' ' + str(o) + ' ' + '\n')
+    return good_choices
+
+def bruteforce(keys: list):
+    pass
 
 
+def main():
+    key = npy.array(bytearray(b'\xB7\x62\xF1\x43\xC1\x93\x3A\x53'))
+    data = npy.array(list(map(lambda c: ord(c), 'He1l9 World!')))
+    print(str(data.size))
+    print(cipher(key, data))
 
 if __name__ == '__main__':
     main()
