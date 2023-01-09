@@ -3,39 +3,49 @@ import random
 
 
 def sbox():
-    random.seed(1000)
-    box = list(range(256))
-    random.shuffle(box)
-    return box
+    random.seed("J3e3232t6", version=2)
+    return random.sample(range(256), k=256)
 
 
-def shuffle(pt: bytearray):
-    random.seed(1000)
-    random.shuffle(pt)
-
-
-def xor(key: bytearray, pt: bytearray):
-    ret = bytearray()
-    for i, value in enumerate(pt):
-        ret.append(pt[i] + key[i])
+def sbox_round(block: list):
+    box = sbox()
+    ret = [0,0,0,0]
+    for i in range(4):
+        ret[i] = box[block[i]]
     return ret
 
 
-def cipher(key: bytearray, pt: bytearray):
-    sbox_baked = sbox()
+def shuffle(pt: list):
+    random.seed("Jg2fe233gf32", version=2)
+    return random.sample(pt, k=len(pt))
+
+
+def xor(key: list, block: list):
+    print(key, block)
+    ret = []
+    for i in range(4):
+        print((block[i] ^ key[i]))
+        ret.append((block[i] ^ key[i]))
+    return ret
+
+
+def cipher(key: list, pt: list):
     key1 = key[:4]
     key2 = key[4:]
     output = xor(key1, pt)
-    for i, value in enumerate(output):
-        output[i] = sbox_baked[value]
-    shuffle(output)
-    output = xor(key2, pt)
+    output = sbox_round(output)
+    output = shuffle(output)
+    print(output)
+    output = xor(key2, output)
+    print(output)
     return output
 
 
 def main():
-    key = bytearray(b'\x1A\x2B\31\x42\x53\x64\x75\x86')
-    pt = bytearray('Hey!', 'utf-8')
+    key = list(b'\x17\x62\31\x43\x23\x74\x73\x36')
+    print(key)
+    pt = list(b'Hey!')
+    print(pt)
     ct = cipher(key, pt)
     print(ct)
 
