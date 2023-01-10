@@ -3,7 +3,7 @@ import random
 import math
 import itertools
 
-random.seed(123)
+random.seed(123456)
 sbox = random.sample(range(256), k=256)
 
 
@@ -45,10 +45,11 @@ def find_good_choices():
                 output &= out_mask
                 if output == out_mask:
                     approx_true += 1
-        if approx_true >= 200 or approx_true <= 10:
-            good_choices.append(
-                (combination[0], combination[1], o, approx_true == 0))
-            o_choices.add(o)
+            
+            if approx_true >= 220 or approx_true <= 30:
+                good_choices.append(
+                    (combination[0], combination[1], o, approx_true <= 100, approx_true))
+                o_choices.add(o)
     return (good_choices, o_choices)
 
 
@@ -78,6 +79,7 @@ def main():
     print(str(len(key)), str(len(data)))
     print(cipher(key, data))
     choices, o_choices = find_good_choices()
+    print(choices)
     results_even = []
     results_odd = []
     is_right = []
@@ -88,8 +90,10 @@ def main():
             mask = generate_block([choice[0], choice[1]], byte)
             out_mask = generate_out_mask(7, byte)
             out = (cipher(key, mask) & out_mask)
+            print(mask, out_mask, out, choice)
             if choice[3]:
                 if all(out  == empty_block):
+                    print('xor 1')
                     results_even[byte].append((choice[0], choice[1]))
                     key_bits = list(bin(key[byte])[2:])
                     key_bits.reverse()
@@ -97,12 +101,14 @@ def main():
                     is_right.append(key_bits[choice[0]] == '1' and key_bits[choice[1]] == '1')
             else:
                 if all(out  == out_mask):
+                    print('x1 xor x2 = y1')
                     results_odd.append([])
                     results_odd[byte].append((choice[0], choice[1]))
                     key_bits = list(bin(key[byte])[2:])
                     key_bits.reverse()
                     key_bits = key_bits + list('00000000')
                     is_right.append(key_bits[choice[0]] == '1' and key_bits[choice[1]] == '1')
+            #print(is_right[-1])
     results_even_new = []
     for i, result in enumerate(results_even_new):
         print('for byte ' + str(i) + ' the result is ' + str(result))
