@@ -74,6 +74,7 @@ def generate_out_mask(bit: int, byte: int):
 
 def main():
     key = npy.array(bytearray(b'\xB7\x62\xF1\x43\xC1\x93\x3A\x53'))
+    full_block = npy.array(bytearray(b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF'))
     empty_block = npy.array(bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00'))
     data = npy.array(list(map(lambda c: ord(c), 'Hello World!')))
     print(str(len(key)), str(len(data)))
@@ -82,31 +83,32 @@ def main():
     print(choices)
     results_even = []
     results_odd = []
+    results_true = []
+    i1_i2_true_o_false = []
     is_right = []
+    buffer = []
     for byte in range(8):
         results_even.append([])
         results_odd.append([])
-        for choice in choices:
-            mask = generate_block([choice[0], choice[1]], byte)
-            out_mask = generate_out_mask(choice[2], byte)
+        results_true.append([])
+        for i1, i2, o, must_xor, correlation in choices:
+            mask = generate_block([i1, i2], byte)
+            out_mask = generate_out_mask(o, byte)
             out = (cipher(key, mask) & out_mask)
             key_bits = list(bin(key[byte])[2:])
             key_bits.reverse()
             key_bits = key_bits + list('00000000')
-            print(mask, out_mask, out, choice, key_bits)
-            if all(out == out_mask):
-                print('')
-                if choice[4] > 220:
-                    is_right.append(bool(key_bits[choice[2]]) and bool(key_bits[choice[0]]) and bool(key_bits[choice[1]]))
-            elif all(out == empty_block):
-                if choice[4] < 30:
-                    is_right.append(bool(key_bits[choice[2]]) and bool(key_bits[choice[0]]) and bool(key_bits[choice[1]]))
-    results_even_new = []
-    for i, result in enumerate(results_even_new):
-        print('for byte ' + str(i) + ' the result is ' + str(result))
-    
+            print(i1, i2 , o, mask, out_mask, out, key_bits)
+            if correlation >= 230:
+                print(key[byte] ^ (2 ** i1 + 2 ** i2) == 2 ** o ^ key[byte])
+            elif correlation < 30:
+                pass
     print('is true ' + str(is_right.count(True)))
     print('is false ' + str(is_right.count(False)))
+    print(i1_i2_true_o_false, is_right, buffer)
+    print(len(list(filter(lambda x: x[0] == '1', buffer))) / len(buffer))
+    print(len(list(filter(lambda x: x[1] == '1', buffer))) / len(buffer))
+    print(len(list(filter(lambda x: x[2] == '1', buffer))) / len(buffer))
     route = ["xor", "sbox", "xor"]
 
 
