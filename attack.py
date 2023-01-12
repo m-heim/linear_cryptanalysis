@@ -1,65 +1,96 @@
+from functools import reduce
 import numpy as npy
 import random
 import math
 import itertools
 from collections import Counter
 
-random.seed(123456)
+random.seed('TEST123', version=2)
 sbox = random.sample(range(256), k=256)
+inv_sbox = [sbox.index(i) for i in range(256)]
+print(sbox, inv_sbox)
+powers = [2 ** x for x in range(8)]
+high_corr = 185/256
+low_corr = 75/256
+
+in_1_out_1 = 0
+in_2_out_1 = 1
+in_3_out_1 = 2
+in_0_out_1 = 3
+
+
+def sbox_byte(b: int):
+    out1 = sbox[b & int('0b00001111', 2)]
+    out2 = sbox[b >> 4]
+    return (out2 << 4) | out1
+
+
+def inv_sbox_byte(b: int):
+    out1 = inv_sbox[b & int('0b00001111', 2)]
+    out2 = inv_sbox[b >> 4]
+    return (out2 << 4) | out1
 
 
 def cipher(key: npy.array, pt: npy.array) -> npy.array:
-    size = math.ceil(pt.size / 8)
+    new_size = math.ceil(pt.size / 8)
     output = pt.copy()
-    output.resize(size*8)
-    for i in range(size):
-        save = output[:i*8]
-        save = npy.append(save, npy.bitwise_xor(output[i*8:(i+1)*8], key))
-        save = npy.append(save, output[(i+1)*8:])
-        output = save
+    output = npy.resize(output, new_size * 8)
+    for i in range(new_size):
+        save = npy.bitwise_xor(output[i*8:(i+1)*8], key)
         for b in range(8):
-            output[i*8+b] = sbox[output[i*8+b]]
-        save = output[:i*8]
-        save = npy.append(save, npy.bitwise_xor(output[i*8:(i+1)*8], key))
-        save = npy.append(save, output[(i+1)*8:])
-        output = save
+            save[b] = sbox[int(save[b])]
+        output[i*8:(i+1)*8] = npy.bitwise_xor(save, key)
     return output
 
 
-def print_sbox():
-    print(sbox)
-    return
+def decipher(key: npy.array, pt: npy.array) -> npy.array:
+    new_size = math.ceil(pt.size / 8)
+    output = pt.copy()
+    output.resize(new_size*8)
+    for i in range(new_size):
+        save = npy.bitwise_xor(output[i*8:(i+1)*8], key)
+        for b in range(8):
+            save[b] = inv_sbox[int(save[b])]
+        output[i*8:(i+1)*8] = npy.bitwise_xor(save, key)
+    return output
 
-def get_bits(number):
-    ret = list(bin(number))[2:]
+
+def get_bits(number) -> list[int]:
+    ret = list(map(lambda b: int(b), bin(number)[2:]))
     ret.reverse()
-    return ret + ['0'] * (8-len(ret))
+    return ret + [0] * (8-len(ret))
 
-def get_bit(number, i):
-    return bool(int(get_bits(number)[i]))
 
-def find_good_choices():
-    powers = [2 ** x for x in range(8)]
-    good_choices = []
-    o_choices = set([])
-    combinations = list(itertools.combinations(list(range(8)), 2))
-    for i1, i2 in combinations:
-        for o in range(8):
-            approx_true = 0
-            for pt in range(255):
-                in_mask = powers[i1] + powers[i2]
-                out_mask = powers[o]
-                output = sbox[in_mask & pt]
-                output &= out_mask
-                # i1 xor i2 = o
-                if bool(get_bit(pt,i1) ^ get_bit(pt,i2) == (output == out_mask)):
-                    approx_true += 1
-            
-            if approx_true >= 220 or approx_true <= 30:
-                good_choices.append(
-                    (i1, i2, o, approx_true <= 30, approx_true))
-                o_choices.add(o)
-    return (good_choices, o_choices)
+def get_bit(number, i) -> bool:
+    return bool(get_bits(number)[i])
+
+
+def find_correlations() -> list:
+    correlations = []
+    for combinations in [itertools.combinations(range(8), i) for i in range(1, 4)]:
+        for positions in combinations:
+            for o in range(8):
+                approx_true = 0
+                for pt in range(256):
+                    in_mask = sum([powers[position] for position in positions])
+                    out_mask = powers[o]
+                    output = sbox[pt | in_mask] & out_mask
+                    # i1 xor i2 = o
+                    val = 0
+                    for position in positions:
+                        val ^= get_bit(pt | in_mask, position)
+                    val = int(val ^ get_bit(output, o))
+                    approx_true += val
+                correlations.append(
+                    (positions, o, approx_true / 256))
+    return correlations
+
+
+def print_table(table: list[list]) -> None:
+    for i in range(len(table)):
+        print(table[i])
+        print('\t', end='')
+        print('')
 
 
 def bruteforce(keys: list):
@@ -67,82 +98,102 @@ def bruteforce(keys: list):
 
 
 def generate_block(bits: list, byte: int):
-    block = npy.array(bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00'))
-    powers = [2 ** x for x in range(8)]
-    block[byte] = powers[bits[0]]
-    block[byte] += powers[bits[1]]
+    block = npy.array(
+        bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00'), dtype=npy.uint8)
+    for bit in bits:
+        block[byte] += powers[bit]
     return block
 
 
-def generate_out_mask(bit: int, byte: int):
-    block = npy.array(bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00'))
-    powers = [2 ** x for x in range(8)]
-    block[byte] = powers[bit]
-    return block
+def crack():
+    key = npy.array(
+        bytearray(b'\xB7\x62\xC1\x43\xA1\x93\x3A\x53'), dtype=npy.uint8)
+    choices = find_correlations()
+    results_even = []
+    results_odd = []
+    false_entries = []
+    true_entries = []
+    for byte in range(8):
+        for positions, o, correlation in filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices):
+            mask = generate_block(
+                list(map(lambda p: p, positions)), byte)
+            out_mask = generate_block([o], byte)
+            out = cipher(key, mask) & out_mask
+            key_bits = get_bits(key[byte])
+            print('BYTE: ', byte, 'POSITIONS', positions, o, get_bits(mask[byte]), get_bits(
+                out_mask[byte]), get_bits(out[byte]), key_bits, correlation)
+            if correlation >= high_corr:
+                # x1 ^ x2 ^ x3 ^ y1 = 1
+                if get_bit(out[byte], o):
+                    print('pos even')
+                    results_even.append((positions, o))
+                    val = 0
+                    for position in positions:
+                        val ^= key_bits[position]
+                    val ^= key_bits[o]
+                    if not val:
+                        true_entries.append(1)
+                    else:
+                        false_entries.append(1)
+                        print('false')
+                else:
+                    print('pos odd')
+                    results_even.append((positions, o))
+                    val = 0
+                    for position in positions:
+                        val ^= key_bits[position]
+                    val ^= key_bits[o]
+                    if val:
+                        true_entries.append(2)
+                    else:
+                        false_entries.append(2)
+                        print('false')
+            elif correlation <= low_corr:
+                # k1 ^ x1 ^ k2 ^ 1= o
+                if get_bit(out[byte], o) ^ 1:
+                    print('neg odd')
+                    results_odd.append((positions, o))
+                    val = 0
+                    for position in positions:
+                        val ^= key_bits[position]
+                    val ^= key_bits[o]
+                    if val:
+                        true_entries.append(3)
+                    else:
+                        false_entries.append(3)
+                        print('false')
+                else:
+                    print('neg even')
+                    results_even.append((positions, o))
+                    val = 0
+                    for position in positions:
+                        val ^= key_bits[position]
+                    val ^= key_bits[o]
+                    if not val:
+                        true_entries.append(4)
+                    else:
+                        false_entries.append(4)
+                        print('false')
+
+    print(Counter(true_entries), Counter(false_entries))
+    print(list(filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices)))
+    print(len(list(filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices))) / len(choices))
+    print(len(true_entries) / (len(true_entries) + len(false_entries)))
 
 
 def main():
-    key = npy.array(bytearray(b'\xB7\x62\xF1\x43\xC1\x93\x3A\x53'))
-    full_block = npy.array(bytearray(b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF'))
-    empty_block = npy.array(bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00'))
-    data = npy.array(list(map(lambda c: ord(c), 'Hello World!')))
-    print(str(len(key)), str(len(data)))
-    print(cipher(key, data))
-    choices, o_choices = find_good_choices()
-    print(choices)
-    results_even = []
-    results_odd = []
-    results_true = []
-    i1_i2_true_o_false = []
-    is_right = []
-    buffer = []
-    false_entries = []
-    for byte in range(8):
-        results_even.append([])
-        results_odd.append([])
-        results_true.append([])
-        for i1, i2, o, must_xor, correlation in choices:
-            mask = generate_block([i1, i2], byte)
-            out_mask = generate_out_mask(o, byte)
-            out = (cipher(key, mask) & out_mask)
-            key_bits = list(bin(key[byte])[2:])
-            key_bits.reverse()
-            key_bits = key_bits + list('00000000')
-            print(i1, i2 , o, list(bin(mask[byte])), list(bin(out_mask[byte])), out, key_bits, correlation)
-            if correlation >= 230:
-                # k1 ^ k2 ^ x1 ^ x2 ^ 1 ^ k3 = o
-                if (all(out == out_mask) ^ 1 ^ 1 ^ 1) == 1:
-                    print('pos odd')
-                    results_odd.append((i1,i2,o))
-                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 1)
-                    if not is_right[-1]:
-                        false_entries.append(1)
-                else:
-                    print('pos even')
-                    results_even.append((i1,i2,o))
-                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 0)
-                    if not is_right[-1]:
-                        false_entries.append(2)
-            elif correlation < 30:
-                # k1 ^ k2 ^ x1 ^ x2 ^ k3 = o
-                if (all(out == out_mask) ^ 1 ^ 1) == 1:
-                    print('neg odd')
-                    results_odd.append((i1,i2,o))
-                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 1)
-                    if not is_right[-1]:
-                        false_entries.append(3)
-                else:
-                    print('neg even')
-                    results_even.append((i1,i2,o))
-                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 0)
-                    if not is_right[-1]:
-                        false_entries.append(4)
-            if not is_right[-1]:
-                print('not correct')
-    print('is true ' + str(is_right.count(True)))
-    print('is false ' + str(is_right.count(False)))
-    print(results_even, results_odd, Counter(false_entries))
-    route = ["xor", "sbox", "xor"]
+    key = npy.array(
+        bytearray(b'\xB7\x62\xF1\x43\xC1\x93\x3A\x53'), dtype=npy.uint8)
+    data = npy.array(
+        list(map(lambda c: ord(c), 'Hello World!')), dtype=npy.uint8)
+    encrypted = cipher(key, data)
+    print(encrypted)
+    decrypted = decipher(key, encrypted)
+    print(decrypted)
+    print(list(data))
+    choices = find_correlations()
+    #print('CHOICES', choices)
+    crack()
 
 
 if __name__ == '__main__':
