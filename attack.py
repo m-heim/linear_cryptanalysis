@@ -2,6 +2,7 @@ import numpy as npy
 import random
 import math
 import itertools
+from collections import Counter
 
 random.seed(123456)
 sbox = random.sample(range(256), k=256)
@@ -29,26 +30,34 @@ def print_sbox():
     print(sbox)
     return
 
+def get_bits(number):
+    ret = list(bin(number))[2:]
+    ret.reverse()
+    return ret + ['0'] * (8-len(ret))
+
+def get_bit(number, i):
+    return bool(int(get_bits(number)[i]))
 
 def find_good_choices():
     powers = [2 ** x for x in range(8)]
     good_choices = []
     o_choices = set([])
     combinations = list(itertools.combinations(list(range(8)), 2))
-    for combination in combinations:
+    for i1, i2 in combinations:
         for o in range(8):
             approx_true = 0
             for pt in range(255):
-                in_mask = powers[combination[0]] + powers[combination[1]]
+                in_mask = powers[i1] + powers[i2]
                 out_mask = powers[o]
                 output = sbox[in_mask & pt]
                 output &= out_mask
-                if output == out_mask:
+                # i1 xor i2 = o
+                if bool(get_bit(pt,i1) ^ get_bit(pt,i2) == (output == out_mask)):
                     approx_true += 1
             
             if approx_true >= 220 or approx_true <= 30:
                 good_choices.append(
-                    (combination[0], combination[1], o, approx_true <= 30, approx_true))
+                    (i1, i2, o, approx_true <= 30, approx_true))
                 o_choices.add(o)
     return (good_choices, o_choices)
 
@@ -87,6 +96,7 @@ def main():
     i1_i2_true_o_false = []
     is_right = []
     buffer = []
+    false_entries = []
     for byte in range(8):
         results_even.append([])
         results_odd.append([])
@@ -98,17 +108,40 @@ def main():
             key_bits = list(bin(key[byte])[2:])
             key_bits.reverse()
             key_bits = key_bits + list('00000000')
-            print(i1, i2 , o, mask, out_mask, out, key_bits)
+            print(i1, i2 , o, list(bin(mask[byte])), list(bin(out_mask[byte])), out, key_bits, correlation)
             if correlation >= 230:
-                print(key[byte] ^ (2 ** i1 + 2 ** i2) == 2 ** o ^ key[byte])
+                # k1 ^ k2 ^ x1 ^ x2 ^ 1 ^ k3 = o
+                if (all(out == out_mask) ^ 1 ^ 1 ^ 1) == 1:
+                    print('pos odd')
+                    results_odd.append((i1,i2,o))
+                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 1)
+                    if not is_right[-1]:
+                        false_entries.append(1)
+                else:
+                    print('pos even')
+                    results_even.append((i1,i2,o))
+                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 0)
+                    if not is_right[-1]:
+                        false_entries.append(2)
             elif correlation < 30:
-                pass
+                # k1 ^ k2 ^ x1 ^ x2 ^ k3 = o
+                if (all(out == out_mask) ^ 1 ^ 1) == 1:
+                    print('neg odd')
+                    results_odd.append((i1,i2,o))
+                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 1)
+                    if not is_right[-1]:
+                        false_entries.append(3)
+                else:
+                    print('neg even')
+                    results_even.append((i1,i2,o))
+                    is_right.append((int(key_bits[i1]) + int(key_bits[i2]) + int(key_bits[o])) % 2 == 0)
+                    if not is_right[-1]:
+                        false_entries.append(4)
+            if not is_right[-1]:
+                print('not correct')
     print('is true ' + str(is_right.count(True)))
     print('is false ' + str(is_right.count(False)))
-    print(i1_i2_true_o_false, is_right, buffer)
-    print(len(list(filter(lambda x: x[0] == '1', buffer))) / len(buffer))
-    print(len(list(filter(lambda x: x[1] == '1', buffer))) / len(buffer))
-    print(len(list(filter(lambda x: x[2] == '1', buffer))) / len(buffer))
+    print(results_even, results_odd, Counter(false_entries))
     route = ["xor", "sbox", "xor"]
 
 
