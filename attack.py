@@ -69,20 +69,22 @@ def find_correlations() -> list:
     correlations = []
     for combinations in [itertools.combinations(range(8), i) for i in range(1, 4)]:
         for positions in combinations:
-            for o in range(8):
-                approx_true = 0
-                for pt in range(256):
-                    in_mask = sum([powers[position] for position in positions])
-                    out_mask = powers[o]
-                    output = sbox[pt | in_mask] & out_mask
-                    # i1 xor i2 = o
-                    val = 0
-                    for position in positions:
-                        val ^= get_bit(pt | in_mask, position)
-                    val = int(val ^ get_bit(output, o))
-                    approx_true += val
-                correlations.append(
-                    (positions, o, approx_true / 256))
+            for o_combinations in [itertools.combinations(range(8), i) for i in range(1, 4)]:
+                for o_positions in o_combinations:
+                    approx_true = 0
+                    for pt in range(256):
+                        in_mask = sum([powers[position] for position in positions])
+                        out_mask = sum([powers[position] for position in o_positions])
+                        output = sbox[pt | in_mask] & out_mask
+                        # i1 xor i2 = o
+                        val = 0
+                        for position in positions:
+                            val ^= get_bit(pt | in_mask, position)
+                        for o_position in o_positions:
+                            val ^= get_bit(output, o_position)
+                        approx_true += val
+                    correlations.append(
+                        (positions, o_positions, approx_true / 256))
     return correlations
 
 
@@ -114,23 +116,25 @@ def crack():
     false_entries = []
     true_entries = []
     for byte in range(8):
-        for positions, o, correlation in filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices):
+        for positions, o_positions, correlation in filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices):
             mask = generate_block(
                 list(map(lambda p: p, positions)), byte)
-            out_mask = generate_block([o], byte)
+            out_mask = generate_block(
+                list(map(lambda p: p, o_positions)), byte)
             out = cipher(key, mask) & out_mask
             key_bits = get_bits(key[byte])
-            print('BYTE: ', byte, 'POSITIONS', positions, o, get_bits(mask[byte]), get_bits(
+            print('BYTE: ', byte, 'POSITIONS', positions, o_positions, get_bits(mask[byte]), get_bits(
                 out_mask[byte]), get_bits(out[byte]), key_bits, correlation)
             if correlation >= high_corr:
                 # x1 ^ x2 ^ x3 ^ y1 = 1
-                if get_bit(out[byte], o):
+                if reduce(lambda x,y: x ^ y, map(lambda p: get_bit(out[byte], p), o_positions + positions)):
                     print('pos even')
-                    results_even.append((positions, o))
+                    results_even.append((positions, o_positions))
                     val = 0
                     for position in positions:
                         val ^= key_bits[position]
-                    val ^= key_bits[o]
+                    for o_position in o_positions:
+                        val ^= key_bits[o_position]
                     if not val:
                         true_entries.append(1)
                     else:
@@ -138,11 +142,12 @@ def crack():
                         print('false')
                 else:
                     print('pos odd')
-                    results_even.append((positions, o))
+                    results_even.append((positions, o_positions))
                     val = 0
                     for position in positions:
                         val ^= key_bits[position]
-                    val ^= key_bits[o]
+                    for o_position in o_positions:
+                        val ^= key_bits[o_position]
                     if val:
                         true_entries.append(2)
                     else:
@@ -150,13 +155,14 @@ def crack():
                         print('false')
             elif correlation <= low_corr:
                 # k1 ^ x1 ^ k2 ^ 1= o
-                if get_bit(out[byte], o) ^ 1:
+                if reduce(lambda x,y: x ^ y, map(lambda p: get_bit(out[byte], p), o_positions + positions)) ^ 1:
                     print('neg odd')
-                    results_odd.append((positions, o))
+                    results_odd.append((positions, o_positions))
                     val = 0
                     for position in positions:
                         val ^= key_bits[position]
-                    val ^= key_bits[o]
+                    for o_position in o_positions:
+                        val ^= key_bits[o_position]
                     if val:
                         true_entries.append(3)
                     else:
@@ -164,11 +170,12 @@ def crack():
                         print('false')
                 else:
                     print('neg even')
-                    results_even.append((positions, o))
+                    results_even.append((positions, o_positions))
                     val = 0
                     for position in positions:
                         val ^= key_bits[position]
-                    val ^= key_bits[o]
+                    for o_position in o_positions:
+                        val ^= key_bits[o_position]
                     if not val:
                         true_entries.append(4)
                     else:
