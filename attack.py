@@ -10,8 +10,8 @@ sbox = random.sample(range(256), k=256)
 inv_sbox = [sbox.index(i) for i in range(256)]
 print(sbox, inv_sbox)
 powers = [2 ** x for x in range(8)]
-high_corr = 185/256
-low_corr = 75/256
+high_corr = 190/256
+low_corr = 70/256
 
 in_1_out_1 = 0
 in_2_out_1 = 1
@@ -69,12 +69,14 @@ def find_correlations() -> list:
     correlations = []
     for combinations in [itertools.combinations(range(8), i) for i in range(1, 4)]:
         for positions in combinations:
-            for o_combinations in [itertools.combinations(range(8), i) for i in range(1, 4)]:
+            for o_combinations in [itertools.combinations(range(8), i) for i in range(1, 3)]:
                 for o_positions in o_combinations:
                     approx_true = 0
                     for pt in range(256):
-                        in_mask = sum([powers[position] for position in positions])
-                        out_mask = sum([powers[position] for position in o_positions])
+                        in_mask = sum([powers[position]
+                                      for position in positions])
+                        out_mask = sum([powers[position]
+                                       for position in o_positions])
                         output = sbox[pt | in_mask] & out_mask
                         # i1 xor i2 = o
                         val = 0
@@ -127,7 +129,7 @@ def crack():
                 out_mask[byte]), get_bits(out[byte]), key_bits, correlation)
             if correlation >= high_corr:
                 # x1 ^ x2 ^ x3 ^ y1 = 1
-                if reduce(lambda x,y: x ^ y, map(lambda p: get_bit(out[byte], p), o_positions + positions)):
+                if reduce(lambda x, y: x ^ y, list(map(lambda p: get_bit(out[byte], p), o_positions)) + list(map(lambda p: get_bit(mask[byte], p), positions))):
                     print('pos even')
                     results_even.append((positions, o_positions))
                     val = 0
@@ -142,7 +144,7 @@ def crack():
                         print('false')
                 else:
                     print('pos odd')
-                    results_even.append((positions, o_positions))
+                    results_odd.append((positions, o_positions))
                     val = 0
                     for position in positions:
                         val ^= key_bits[position]
@@ -155,36 +157,38 @@ def crack():
                         print('false')
             elif correlation <= low_corr:
                 # k1 ^ x1 ^ k2 ^ 1= o
-                if reduce(lambda x,y: x ^ y, map(lambda p: get_bit(out[byte], p), o_positions + positions)) ^ 1:
-                    print('neg odd')
+                if not reduce(lambda x, y: x ^ y, list(map(lambda p: get_bit(out[byte], p), o_positions)) + list(map(lambda p: get_bit(mask[byte], p), positions))):
+                    print('neg even')
                     results_odd.append((positions, o_positions))
                     val = 0
                     for position in positions:
                         val ^= key_bits[position]
                     for o_position in o_positions:
                         val ^= key_bits[o_position]
-                    if val:
+                    if not val:
                         true_entries.append(3)
                     else:
                         false_entries.append(3)
                         print('false')
                 else:
-                    print('neg even')
+                    print('neg odd')
                     results_even.append((positions, o_positions))
                     val = 0
                     for position in positions:
                         val ^= key_bits[position]
                     for o_position in o_positions:
                         val ^= key_bits[o_position]
-                    if not val:
+                    if val:
                         true_entries.append(4)
                     else:
                         false_entries.append(4)
                         print('false')
 
     print(Counter(true_entries), Counter(false_entries))
-    print(list(filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices)))
-    print(len(list(filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices))) / len(choices))
+    print(
+        list(filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices)))
+    print(len(list(filter(
+        lambda c: c[2] <= low_corr or c[2] >= high_corr, choices))) / len(choices))
     print(len(true_entries) / (len(true_entries) + len(false_entries)))
 
 
@@ -199,7 +203,7 @@ def main():
     print(decrypted)
     print(list(data))
     choices = find_correlations()
-    #print('CHOICES', choices)
+    # print('CHOICES', choices)
     crack()
 
 
