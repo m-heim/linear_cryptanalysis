@@ -126,7 +126,7 @@ def decipher(key: npy.array, pt: npy.array, sbox_width: int = 4) -> npy.array:
 
 def find_correlations(sbox_width: int = 4, in_amount: int = 3, out_amount: int = 2) -> list:
     correlations = []
-    for positions_len_i in [list(itertools.combinations(range(sbox_width), i)) for i in range(1, 5)]:
+    for positions_len_i in [list(itertools.combinations(range(sbox_width), i)) for i in range(2, 5)]:
         for o_positions_len_i in [itertools.combinations(range(sbox_width), i) for i in range(1, 5)]:
             for positions in positions_len_i:
                 for o_positions in o_positions_len_i:
