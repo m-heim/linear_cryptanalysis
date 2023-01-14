@@ -11,7 +11,6 @@ sboxes = [random.sample(range(2 ** i), k=2 ** i)
           for i in range(sbox_maximum_width)]
 inv_sboxes = [[sboxes[i].index(j) for j in range(
     len(sboxes[i]))] for i in range(len(sboxes))]
-print(sboxes, inv_sboxes)
 powers = [2 ** x for x in range(8)]
 low_corr, high_corr = 30/256, 220/256
 
@@ -28,8 +27,10 @@ def sbox_byte(b: int, sbox_size: int = 4):
         b >> i * sbox_size
     return out
 
+
 def number_from_powers(bits: list[int]):
     return sum(map(lambda p: powers[p], bits))
+
 
 def inv_sbox_byte(b: int, sbox_size: int = 4):
     if 8 / sbox_size != int(8 / sbox_size):
@@ -81,14 +82,19 @@ def get_bit(number: int, i: int) -> bool:
 
 def find_correlations(sbox_width: int = 4) -> list:
     correlations = []
-    for combinations in [itertools.combinations(range(sbox_width), i) for i in range(1, 4)]:
-        for positions in combinations:
-            for o_combinations in [itertools.combinations(range(sbox_width), i) for i in range(1, 4)]:
-                for o_positions in o_combinations:
-                    approx_true = 0
+    for positions in list(itertools.combinations(range(sbox_width), 3)):
+        for o_positions in itertools.combinations(range(sbox_width), 2):
+            approx_true = 0
+            input_combinations = itertools.combinations_with_replacement([False, True], 3)
+            output_combinations = itertools.combinations_with_replacement([False, True], 2)
+            print(list(input_combinations))
+            print(list(output_combinations))
+            for input_combination in input_combinations:
+                print(input_combination)
+                for output_combination in output_combinations:
                     for pt in range(2 ** sbox_width):
-                        in_mask = number_from_powers(positions)
-                        out_mask = number_from_powers(o_positions)
+                        in_mask = number_from_powers([value for i, value in enumerate(positions) if input_combination[i]])
+                        out_mask = number_from_powers([value for i, value in enumerate(o_positions) if output_combination[i]])
                         output = sbox_byte(pt | in_mask, sbox_width) & out_mask
                         # i1 xor i2 = o
                         val = 0
@@ -98,8 +104,8 @@ def find_correlations(sbox_width: int = 4) -> list:
                             val ^= get_bit(output, o_position)
                         approx_true += val
                     correlations.append(
-                        (positions, o_positions, approx_true / 2 ** sbox_width))
-    return correlations
+                        (positions, o_positions, approx_true / (2 ** sbox_width)))
+        return correlations
 
 
 def print_table(table: list[list]) -> None:
@@ -124,18 +130,17 @@ def generate_block(bits: list, byte: int):
 def crack(sbox_width: int = 4):
     key = npy.array(
         bytearray(b'\xB7\x62\xC1\x43\xA1\x93\x3A\x53'), dtype=npy.uint8)
-    choices = find_correlations()
+    choices = find_correlations(sbox_width=4)
     results_even = []
     results_odd = []
     false_entries = []
     true_entries = []
     for byte in range(8):
         for positions, o_positions, correlation in filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices):
-            for nibble in range(0, int(8/sbox_width), 4):
+            for nibble in range(0, 8, sbox_width):
                 positions = list(map(lambda p: p + nibble, positions))
                 o_positions = list(map(lambda p: p + nibble, o_positions))
-                mask = generate_block(positions, byte)
-                out_mask = generate_block(o_positions, byte)
+                mask, out_mask = generate_block(positions, byte), generate_block(o_positions, byte)
                 out = cipher(key, mask) & out_mask
                 key_bits = get_bits(key[byte])
                 print('BYTE: ', byte, 'POSITIONS', positions, o_positions, get_bits(mask[byte]), get_bits(
@@ -147,7 +152,8 @@ def crack(sbox_width: int = 4):
                     val ^= key_bits[o_position]
                 if correlation >= high_corr:
                     # x1 ^ x2 ^ x3 ^ y1 = 1
-                    xoredv = reduce(lambda x, y: x ^ y, list(map(lambda p: get_bit(out[byte], p), o_positions)) + list(map(lambda p: get_bit(mask[byte], p), positions)))
+                    xoredv = reduce(lambda x, y: x ^ y, list(map(lambda p: get_bit(
+                        out[byte], p), o_positions)) + list(map(lambda p: get_bit(mask[byte], p), positions)))
                     if xoredv:
                         print('pos even')
                         results_even.append((positions, o_positions))
@@ -166,7 +172,8 @@ def crack(sbox_width: int = 4):
                             print('false')
                 elif correlation <= low_corr:
                     # k1 ^ x1 ^ k2 ^ 1= o
-                    xored = reduce(lambda x, y: x ^ y, list(map(lambda p: get_bit(out[byte], p), o_positions)) + list(map(lambda p: get_bit(mask[byte], p), positions)))
+                    xored = reduce(lambda x, y: x ^ y, list(map(lambda p: get_bit(
+                        out[byte], p), o_positions)) + list(map(lambda p: get_bit(mask[byte], p), positions)))
                     if not xored:
                         print('neg even')
                         results_even.append((positions, o_positions))
@@ -187,7 +194,7 @@ def crack(sbox_width: int = 4):
     print('TRUE', Counter(true_entries), 'FALSE', Counter(false_entries))
     print(
         list(filter(lambda c: c[2] <= low_corr or c[2] >= high_corr, choices)))
-    print(len(true_entries) / (len(true_entries) + len(false_entries)))
+    print(len(true_entries) / (1 + len(true_entries) + len(false_entries)))
 
 
 def main():
