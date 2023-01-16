@@ -6,7 +6,7 @@ import itertools
 from collections import Counter
 
 sbox_maximum_width = 8 + 1
-random.seed('543dasswdqqwddqwdqwddqwfrrfqwwddse', version=2)
+random.seed('T', version=2)
 sboxes = [random.sample(range(2 ** i), k=2 ** i)
           for i in range(sbox_maximum_width)]
 inv_sboxes = [[sboxes[i].index(j) for j in range(
@@ -153,6 +153,19 @@ def find_correlations(sbox_width: int = 4) -> list:
                         (positions, o_positions, (approx_true / runs - 0.5) * 2))
     return correlations
 
+def find_canceling_equations(positions: list):
+    new_positions = []
+    buf = None
+    for i in range(len(positions[1])):
+        buf = list(positions[i][0])
+        for j in range(len(positions[i][1])):
+            if positions[i][1][j] in positions[i][0]:
+                buf.remove(positions[i][1][j])
+        if len(buf) < len(positions[i]):
+            new_positions.append(positions[i])
+    return new_positions
+    
+
 
 def crack(sbox_width: int = 4):
     key = npy.array(
@@ -163,6 +176,7 @@ def crack(sbox_width: int = 4):
     results_odd = []
     false_entries = []
     true_entries = []
+    key_guesses = []
     for byte in range(8):
         for positions, o_positions, correlation in filtered_choices:
             for nibble in range(0, 8, sbox_width):
@@ -178,42 +192,24 @@ def crack(sbox_width: int = 4):
                     key[byte], o_positions)
                 xoredv = xor_positions(mask[byte], positions) ^ xor_positions(
                     ciphertext[byte], o_positions)
-                if correlation >= high_corr:
-                    # x1 ^ x2 ^ x3 ^ y1 = 1
-                    if xoredv:
-                        print('pos even')
-                        results_even.append((positions, o_positions))
-                        if not val:
-                            true_entries.append(1)
-                        else:
-                            false_entries.append(1)
-                            print('false')
+                if correlation <= - high_corr:
+                    xoredv ^= 1
+                if xoredv:
+                    print('pos even')
+                    results_even.append((positions, o_positions))
+                    if not val:
+                        true_entries.append(1)
                     else:
-                        print('pos odd')
-                        results_odd.append((positions, o_positions))
-                        if val:
-                            true_entries.append(2)
-                        else:
-                            false_entries.append(2)
-                            print('false')
-                elif correlation <= - high_corr:
-                    # k1 ^ x1 ^ k2 ^ 1 = o
-                    if not xoredv:
-                        print('neg even')
-                        results_even.append((positions, o_positions))
-                        if not val:
-                            true_entries.append(3)
-                        else:
-                            false_entries.append(3)
-                            print('false')
+                        false_entries.append(1)
+                        print('false')
+                else:
+                    print('pos odd')
+                    results_odd.append((positions, o_positions))
+                    if val:
+                        true_entries.append(2)
                     else:
-                        print('neg odd')
-                        results_even.append((positions, o_positions))
-                        if val:
-                            true_entries.append(4)
-                        else:
-                            false_entries.append(4)
-                            print('false')
+                        false_entries.append(2)
+                        print('false')
 
     print('TRUE', Counter(true_entries), 'FALSE', Counter(false_entries))
     print('CHOICES', filter_choices(choices))
@@ -233,6 +229,7 @@ def main():
     print('ORIGINAL', list(data))
     crack(sbox_width=4)
     print(find_correlations(sbox_width=4))
+    print(find_canceling_equations(filter_choices(find_correlations(sbox_width=4))))
 
 
 if __name__ == '__main__':
