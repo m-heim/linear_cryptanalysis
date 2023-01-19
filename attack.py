@@ -12,7 +12,7 @@ sboxes = [random.sample(range(2 ** i), k=2 ** i)
 inv_sboxes = [[sboxes[i].index(j) for j in range(
     len(sboxes[i]))] for i in range(len(sboxes))]
 powers = [2 ** x for x in range(8)]
-high_corr = 0.3
+high_corr = 0.25
 print(sboxes[4], inv_sboxes[4])
 
 
@@ -66,8 +66,11 @@ def filter_list(input, filter):
     return ret
 
 
-def bruteforce(keys: list):
-    pass
+def bruteforce(key: npy.array):
+    for i in range(2 ** 64):
+        print(i)
+        if all(decipher(npy.array(i, dtype=npy.uint8), npy.array(bytearray(b'\xBF\xD3\x09\x68\60\x7C\x95\xE3'), dtype=npy.uint8), 4) == npy.array(bytearray(b'\x23\x34\x45\x56\x67\x78\x91\12'), dtype=npy.uint8)):
+            return(i)
 
 
 def xor_list(lst: list):
@@ -155,31 +158,38 @@ def find_correlations(sbox_width: int = 4) -> list:
 
 def find_canceling_equations(positions: list):
     new_positions = []
-    buf = None
-    for i in range(len(positions[1])):
-        buf = list(positions[i][0])
-        for j in range(len(positions[i][1])):
-            if positions[i][1][j] in positions[i][0]:
-                buf.remove(positions[i][1][j])
-        if len(buf) < len(positions[i]):
-            new_positions.append(positions[i])
+    for i in range(len(positions)):
+        added = positions[i][1] + positions[1][0]
+        canceled_out_result = []
+        for p in added:
+            if p in canceled_out_result:
+                canceled_out_result.remove(p)
+            else:
+                canceled_out_result.append(p)
+        if len(canceled_out_result) < len(added) and len(canceled_out_result) >= 1:
+            new_positions.append(positions[i] + (canceled_out_result,))
     return new_positions
     
 
 
 def crack(sbox_width: int = 4):
     key = npy.array(
+        bytearray(b'\x00\x00\x00\x00\x00\x93\x3A\x53'), dtype=npy.uint8)
+    key_cpy = npy.array(
         bytearray(b'\xB7\x62\xC1\x43\xA1\x93\x3A\x53'), dtype=npy.uint8)
     choices = find_correlations(sbox_width=4)
     filtered_choices = filter_choices(choices)
+    canceled_out_choices = find_canceling_equations(filtered_choices)
     results_even = []
     results_odd = []
     false_entries = []
     true_entries = []
     key_guesses = []
+    result: list[int, bool] = []
     for byte in range(8):
-        for positions, o_positions, correlation in filtered_choices:
+        for positions, o_positions, correlation, bits in canceled_out_choices:
             for nibble in range(0, 8, sbox_width):
+                abs_position = list(map(lambda p: byte * 8 + nibble + p, bits))
                 positions = list(map(lambda p: p + nibble, positions))
                 o_positions = list(map(lambda p: p + nibble, o_positions))
                 mask, out_mask = generate_block(
@@ -197,6 +207,7 @@ def crack(sbox_width: int = 4):
                 if xoredv:
                     print('pos even')
                     results_even.append((positions, o_positions))
+                    result.append([abs_position, True])
                     if not val:
                         true_entries.append(1)
                     else:
@@ -205,6 +216,7 @@ def crack(sbox_width: int = 4):
                 else:
                     print('pos odd')
                     results_odd.append((positions, o_positions))
+                    result.append([abs_position, False])
                     if val:
                         true_entries.append(2)
                     else:
@@ -215,6 +227,7 @@ def crack(sbox_width: int = 4):
     print('CHOICES', filter_choices(choices))
     print('TRUTH RATE', len(true_entries) /
           (1 + len(true_entries) + len(false_entries)))
+    print(result)
 
 
 def main():
@@ -222,14 +235,18 @@ def main():
         bytearray(b'\xB7\x62\xF1\x43\xC1\x93\x3A\x53'), dtype=npy.uint8)
     data = npy.array(
         list(map(lambda c: ord(c), 'Hello World!')), dtype=npy.uint8)
+    data2 = npy.array(bytearray(b'\x23\x34\x45\x56\x67\x78\x91\12'), dtype=npy.uint8)
     encrypted = cipher(key, data)
+    encrypted2 = cipher(key, data2)
     print('ENCRYPTED', encrypted)
+    print('ENCRYPTED', encrypted2)
     decrypted = decipher(key, encrypted)
     print('DECRYPTED', decrypted)
     print('ORIGINAL', list(data))
     crack(sbox_width=4)
-    print(find_correlations(sbox_width=4))
-    print(find_canceling_equations(filter_choices(find_correlations(sbox_width=4))))
+    print(bruteforce(key))
+    #print(find_correlations(sbox_width=4))
+    #print(find_canceling_equations(filter_choices(find_correlations(sbox_width=4))))
 
 
 if __name__ == '__main__':
